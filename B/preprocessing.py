@@ -1,3 +1,4 @@
+import random
 import re
 from collections import Counter
 from itertools import chain
@@ -54,18 +55,38 @@ def collate_fn(batch):
     return english_sentences_padded, french_sentences_padded
 
 
+def split_dataset(dataset, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, shuffle=True):
+    """
+    Splits a dataset into training, validation, and test sets.
+    """
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+
+    # if shuffle:
+    #     random.shuffle(indices)
+
+    train_size = int(train_ratio * dataset_size)
+    val_size = int(val_ratio * dataset_size)
+    test_size = dataset_size - train_size - val_size
+
+    train_indices = indices[:train_size]
+    val_indices = indices[train_size:train_size + val_size]
+    test_indices = indices[train_size + val_size:]
+
+    train_dataset = torch.utils.data.Subset(dataset, train_indices)
+    val_dataset = torch.utils.data.Subset(dataset, val_indices)
+    test_dataset = torch.utils.data.Subset(dataset, test_indices)
+
+    return train_dataset, val_dataset, test_dataset
+
+
 def get_dataloader():
     # Read sentences from files
-    english_sentences = read_sentences("/scratch/zczqyc4/ELEC0141-DataSet/europarl-v7.fr-en.en")
-    french_sentences = read_sentences("/scratch/zczqyc4/ELEC0141-DataSet/europarl-v7.fr-en.fr")
+    english_sentences = read_sentences("/scratch/zczqyc4/ELEC0141-DataSet/english_subset.txt")
+    french_sentences = read_sentences("/scratch/zczqyc4/ELEC0141-DataSet/french_subset.txt")
     # Calculate the 10% index
     num_sentences = len(english_sentences)
-    end_index = int(num_sentences * 0.01)
     print("Number of sentences: {}".format(num_sentences))
-
-    # Keep only 10% of the sentences
-    english_sentences = english_sentences[:end_index]
-    french_sentences = french_sentences[:end_index]
 
     # Tokenize and build vocabularies
     tokenized_english = [tokenize(sentence) for sentence in english_sentences]
@@ -75,17 +96,22 @@ def get_dataloader():
 
     # Create dataset and dataloader
     dataset = TranslationDataset(english_sentences, french_sentences, english_word_to_idx, french_word_to_idx)
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    # split the dataset into train, validation, and test sets
+    train_dataset, val_dataset, test_dataset = split_dataset(dataset, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1,
+                                                             shuffle=True)
 
-    # Create dataloaders for training and validation sets
-    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, collate_fn=collate_fn, num_workers=2)
-    val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False, collate_fn=collate_fn, num_workers=2)
+    # Create dataloaders for training and validation sets, may use num_workers. Batch-wise padding is applied by collate_fn.
+    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, collate_fn=collate_fn)
+    val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False, collate_fn=collate_fn)
+    test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=False, collate_fn=collate_fn)
 
     # TODO: return words ... to feed into training process
-    return train_dataloader, val_dataloader, english_words, french_words, english_word_to_idx, french_word_to_idx
+    return train_dataloader, val_dataloader, test_dataloader, english_words, french_words, english_word_to_idx, french_word_to_idx
 
 
 if __name__ == '__main__':
-    dataloader = get_dataloader()
+    train_dataloader, val_dataloader, test_dataloader, english_words, french_words, english_word_to_idx, french_word_to_idx = get_dataloader()
+    for english_sentences, french_sentences in test_dataloader:
+        print(english_sentences.shape)
+        print(french_sentences.shape)
+        break

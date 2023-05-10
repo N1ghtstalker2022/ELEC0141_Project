@@ -16,12 +16,14 @@ def print_gpu_info():
 
 
 class Trainer:
-    def __init__(self, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer):
+    def __init__(self, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer, encoder_scheduler=None, decoder_scheduler=None):
         self.encoder = encoder
         self.decoder = decoder
         self.criterion = criterion
         self.encoder_optimizer = encoder_optimizer
         self.decoder_optimizer = decoder_optimizer
+        self.encoder_scheduler = encoder_scheduler
+        self.decoder_scheduler = decoder_scheduler
         self.train_dataloader = None
         self.val_dataloader = None
         self.english_words = None
@@ -29,7 +31,7 @@ class Trainer:
         self.french_word_to_idx = None
 
     def train(self, train_dataloader, val_dataloader, english_words, french_words, french_word_to_idx=None,
-              num_epochs=20):
+              num_epochs=50):
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
         self.english_words = english_words
@@ -63,8 +65,13 @@ class Trainer:
 
             print(f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {train_loss}, Val Loss: {val_loss}, time: {time.time() - epoch_start_time:.2f} seconds")
 
+            if self.encoder_scheduler:
+                self.encoder_scheduler.step()
+            if self.decoder_scheduler:
+                self.decoder_scheduler.step()
+
         print(f"Training time: {time.time() - start_time:.2f} seconds")
-        return train_losses, val_losses
+        return self.encoder, self.decoder,train_losses, val_losses
 
     def run_epoch(self, device, training=True):
         dataloader = self.train_dataloader if training else self.val_dataloader
@@ -86,6 +93,8 @@ class Trainer:
             decoder_input = torch.tensor(
                 [[self.french_word_to_idx['<sos>']]] * french_sentences.size(1)).transpose(0, 1).to(device)
             decoder_hidden = encoder_hidden
+            # print(f"decoder input shape {decoder_input.shape}")
+            # print(f" decoder hidden shape {decoder_hidden.shape}")
 
             loss = 0
             for di in range(french_sentences.size(0)):

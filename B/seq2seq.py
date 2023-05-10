@@ -48,3 +48,4 @@ class ModelBuilder:
         encoder = Encoder(self.input_size, self.hidden_size)
         decoder = Decoder(self.hidden_size, self.output_size)
         return encoder, decoder
+
