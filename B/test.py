@@ -30,14 +30,11 @@ def test_model(model, test_dataloader, french_words, french_word_to_idx, device)
             trg_sentences = french_sentences.to(device)
             output = model(src_sentences, trg_sentences, 0)
             # output = nn.LogSoftmax(dim=2)(output)
-            numpy_ = output.numpy()[3, 2, :]
-            print(numpy_)
-            max_value = np.max(numpy_)
-            print(max_value)
+
             # output_dim = output.shape[-1]
             output_tokens = torch.argmax(output, dim=2)
 
-            print(output_tokens.shape)
+
 
             # hypotheses.extend([' '.join([french_words[i] for i in tokens.flatten()]) for tokens in output_tokens])
 

@@ -1,3 +1,20 @@
+"""
+This script trains and tests a machine translation model using a sequence-to-sequence architecture.
+
+1. Data preprocessing:
+   - Loads and preprocesses the training, validation, and test data.
+   - Builds vocabularies for English and French words.
+
+2. Train and validate Machine Translation Model
+   - Sets up the machine translation model using an encoder and decoder.
+   - Loads pretrained word embeddings (optional).
+   - Trains the model using the training set and validates using the validation set.
+   - Saves the trained model.
+
+3. Testing:
+   - Loads the saved model.
+   - Tests the model using the test set.
+"""
 import os
 import random
 
@@ -92,10 +109,8 @@ print("Training...")
 criterion = nn.CrossEntropyLoss()  # Negative Log-Likelihood Loss
 weight_decay_rate = 0
 
-optimizer = torch.optim.SGD(encoder.parameters(), lr=0.1,
-                                    weight_decay=weight_decay_rate)  # SGD optimizer for encoder
-# decoder_optimizer = torch.optim.SGD(decoder.parameters(), lr=0.1,
-#                                     weight_decay=weight_decay_rate)  # SGD optimizer for decoder
+optimizer = torch.optim.SGD(seq2seq_model.parameters(), lr=0.01,
+                                    weight_decay=weight_decay_rate)  # SGD optimizer
 
 # encoder_scheduler = StepLR(encoder_optimizer, step_size=10, gamma=0.5)  # Learning rate scheduler for encoder
 # decoder_scheduler = StepLR(decoder_optimizer, step_size=10, gamma=0.5)  # Learning rate scheduler for decoder
@@ -117,9 +132,6 @@ plot_losses(train_losses, val_losses, 0.01, 0)
 print("Testing...")
 device = torch.device("cpu")
 
-# torch.save(trained_encoder.state_dict(), 'my_model_encoder.pt')
-# torch.save(trained_decoder.state_dict(), 'my_model_decoder.pt')
-
 # load the saved model
 seq2seq_state_dict = torch.load('seq2seq_20epoch.pth', map_location=torch.device('cpu'))
 # decoder_state_dict = torch.load('decoder_50epoch.pth', map_location=torch.device('cpu'))
@@ -129,48 +141,9 @@ enc_dec_builder = B.ModelBuilder(english_words, french_words, pretrained_embeddi
 encoder, decoder = enc_dec_builder.build()
 seq2seq_model = B.Seq2Seq(encoder, decoder, device)
 
-#
-# # load the state dictionary into the model
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# if torch.cuda.device_count() > 1:
-#     print(f"Using {torch.cuda.device_count()} GPUs")
-#     encoder = nn.DataParallel(encoder)
-#     decoder = nn.DataParallel(decoder)
-#
-#
+
 seq2seq_model.load_state_dict(seq2seq_state_dict)
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# if torch.cuda.device_count() > 1:
-#     print(f"Using {torch.cuda.device_count()} GPUs")
-#     encoder = nn.DataParallel(encoder)
-#     decoder = nn.DataParallel(decoder)
 
 B.test_model(seq2seq_model, test_dataloader, french_words,
              french_word_to_idx, device)  # Test model based on the test set.
-##
-# ======================================================================================================================
-# acc_A_test = model_A.test(args...)  # Test model based on the test set.
-# Clean up memory / GPU
-# etc...  # Some code to free memory if necessary.
-
-# ======================================================================================================================
-# Task B
-# model_B = B(args...)
-# acc_B_train = model_B.train(args...)
-# acc_B_test = model_B.test(args...)
-# Clean
-# up
-# memory / GPU
-# etc...
-
-# ======================================================================================================================
-# Print out your results with following format:
-# print('TA:{},{};TB:{},{};'.format(acc_A_train, acc_A_test,
-#                                   acc_B_train, acc_B_test))
-
-# If you are not able to finish a task, fill the corresponding variable with 'TBD'. For example:
-# acc_A_train = 'TBD'
-# acc_B_test = 'TBD'
