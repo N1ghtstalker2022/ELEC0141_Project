@@ -25,6 +25,16 @@ print("Number of sentences: {}".format(num_sentences))
 english_sentences = english_sentences[:end_index]
 french_sentences = french_sentences[:end_index]
 
+MIN_LENGTH = 3
+MAX_LENGTH = 20
+extracted_english_sentences = list()
+extracted_french_sentences = list()
+# Filter sentences with length shorter than 20
+for i in range(len(english_sentences)):
+    if MIN_LENGTH <= len(english_sentences[i].split()) <= MAX_LENGTH and  MIN_LENGTH <= len(french_sentences[i].split()) <= MAX_LENGTH:
+        extracted_english_sentences.append(english_sentences[i])
+        extracted_french_sentences.append(french_sentences[i])
+
 # Write the sentences to new files
-write_sentences("/scratch/zczqyc4/ELEC0141-DataSet/english_subset.txt", english_sentences)
-write_sentences("/scratch/zczqyc4/ELEC0141-DataSet/french_subset.txt", french_sentences)
+write_sentences("/scratch/zczqyc4/ELEC0141-DataSet/english_subset.txt", extracted_english_sentences)
+write_sentences("/scratch/zczqyc4/ELEC0141-DataSet/french_subset.txt", extracted_french_sentences)

@@ -16,12 +16,10 @@ def print_gpu_info():
 
 
 class Trainer:
-    def __init__(self, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer, encoder_scheduler=None, decoder_scheduler=None):
-        self.encoder = encoder
-        self.decoder = decoder
+    def __init__(self, model, criterion, optimizer, encoder_scheduler=None, decoder_scheduler=None):
+        self.model = model
         self.criterion = criterion
-        self.encoder_optimizer = encoder_optimizer
-        self.decoder_optimizer = decoder_optimizer
+        self.optimizer = optimizer
         self.encoder_scheduler = encoder_scheduler
         self.decoder_scheduler = decoder_scheduler
         self.train_dataloader = None
@@ -31,24 +29,24 @@ class Trainer:
         self.french_word_to_idx = None
 
     def train(self, train_dataloader, val_dataloader, english_words, french_words, french_word_to_idx=None,
-              num_epochs=50):
+              num_epochs=10):
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
         self.english_words = english_words
         self.french_words = french_words
         self.french_word_to_idx = french_word_to_idx
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print_gpu_info()
 
         # enable distributed learning if multiple GPUs are available
-        if torch.cuda.device_count() > 1:
-            print(f"Using {torch.cuda.device_count()} GPUs")
-            self.encoder = nn.DataParallel(self.encoder)
-            self.decoder = nn.DataParallel(self.decoder)
+        # if torch.cuda.device_count() > 1:
+        #     print(f"Using {torch.cuda.device_count()} GPUs")
+        #     self.model = nn.DataParallel(self.model)
+        #
+        print(f"Using one GPU")
 
-        self.encoder = self.encoder.to(device)
-        self.decoder = self.decoder.to(device)
+        self.model = self.model.to(device)
 
         train_losses, val_losses = [], []
 
@@ -71,41 +69,31 @@ class Trainer:
                 self.decoder_scheduler.step()
 
         print(f"Training time: {time.time() - start_time:.2f} seconds")
-        return self.encoder, self.decoder,train_losses, val_losses
+        return self.model, train_losses, val_losses
 
     def run_epoch(self, device, training=True):
         dataloader = self.train_dataloader if training else self.val_dataloader
-        self.encoder.train(training)
-        self.decoder.train(training)
+        self.model.train(training)
         total_loss = 0
 
         for english_sentences, french_sentences in dataloader:
-            english_sentences = english_sentences.to(device)
-            french_sentences = french_sentences.to(device)
+            src_sentences = english_sentences.to(device)
+            print(src_sentences.shape)
+            trg_sentences = french_sentences.to(device)
 
             if training:
-                self.encoder_optimizer.zero_grad()
-                self.decoder_optimizer.zero_grad()
+                self.optimizer.zero_grad()
 
-            encoder_hidden = self.encoder.module.init_hidden(english_sentences.size(1)).to(device)
-            _, encoder_hidden = self.encoder(english_sentences, encoder_hidden)
-
-            decoder_input = torch.tensor(
-                [[self.french_word_to_idx['<sos>']]] * french_sentences.size(1)).transpose(0, 1).to(device)
-            decoder_hidden = encoder_hidden
-            # print(f"decoder input shape {decoder_input.shape}")
-            # print(f" decoder hidden shape {decoder_hidden.shape}")
-
-            loss = 0
-            for di in range(french_sentences.size(0)):
-                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                loss += self.criterion(decoder_output, french_sentences[di])
-                decoder_input = french_sentences[di].unsqueeze(0)
+            output = self.model(src_sentences, trg_sentences)
+            # output = nn.LogSoftmax(dim=2)(output)
+            output_dim = output.shape[-1]
+            output = output[1:].view(-1, output_dim)
+            trg = trg_sentences[1:].view(-1)
+            loss = self.criterion(output, trg)
 
             if training:
                 loss.backward()
-                self.encoder_optimizer.step()
-                self.decoder_optimizer.step()
+                self.optimizer.step()
 
             total_loss += loss.item() / len(dataloader)
         return total_loss

@@ -3,8 +3,10 @@ import re
 from collections import Counter
 from itertools import chain
 import torch
+from gensim.models import KeyedVectors
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, random_split
+import spacy
 
 
 # from B.seq2seq import Encoder, Decoder
@@ -16,8 +18,9 @@ def read_sentences(file_path):
     return [sentence.strip() for sentence in sentences]
 
 
-def tokenize(sentence):
-    return [word.lower() for word in re.findall(r'\b\w+\b', sentence)]
+def tokenize(sentence, tokenizer):
+
+    return [tok.text.lower() for tok in tokenizer.tokenizer(sentence)]
 
 
 def build_vocab(tokenized_sentences, min_freq=2):
@@ -28,11 +31,13 @@ def build_vocab(tokenized_sentences, min_freq=2):
 
 
 class TranslationDataset(Dataset):
-    def __init__(self, english_sentences, french_sentences, english_vocab, french_vocab):
+    def __init__(self, english_sentences, french_sentences, english_vocab, french_vocab, en_tokenizer, fr_tokenizer):
         self.english_sentences = english_sentences
         self.french_sentences = french_sentences
         self.english_vocab = english_vocab
         self.french_vocab = french_vocab
+        self.en_tokenizer = en_tokenizer
+        self.fr_tokenizer = fr_tokenizer
 
     def __len__(self):
         return len(self.english_sentences)
@@ -40,11 +45,12 @@ class TranslationDataset(Dataset):
     def __getitem__(self, idx):
         eng_sentence = [self.english_vocab['<sos>']] + \
                        [self.english_vocab.get(word, self.english_vocab['<unk>']) for
-                        word in tokenize(self.english_sentences[idx])] + \
+                        word in tokenize(self.english_sentences[idx], self.en_tokenizer)] + \
                        [self.english_vocab['<eos>']]
         fr_sentence = [self.french_vocab['<sos>']] + [self.french_vocab.get(word, self.french_vocab['<unk>']) for word
-                                                      in tokenize(self.french_sentences[idx])] + [
+                                                      in tokenize(self.french_sentences[idx], self.fr_tokenizer)] + [
                           self.french_vocab['<eos>']]
+
         return torch.tensor(eng_sentence), torch.tensor(fr_sentence)
 
 
@@ -80,26 +86,40 @@ def split_dataset(dataset, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, shuff
     return train_dataset, val_dataset, test_dataset
 
 
+
+
 def get_dataloader():
     # Read sentences from files
     english_sentences = read_sentences("/scratch/zczqyc4/ELEC0141-DataSet/english_subset.txt")
     french_sentences = read_sentences("/scratch/zczqyc4/ELEC0141-DataSet/french_subset.txt")
-    # Calculate the 10% index
+    print(english_sentences[503])
     num_sentences = len(english_sentences)
     print("Number of sentences: {}".format(num_sentences))
 
     # Tokenize and build vocabularies
-    tokenized_english = [tokenize(sentence) for sentence in english_sentences]
-    tokenized_french = [tokenize(sentence) for sentence in french_sentences]
+    en_tokenizer = spacy.load("en_core_web_sm")
+    fr_tokenizer = spacy.load("fr_core_news_sm")
+
+    tokenized_english = [tokenize(sentence, en_tokenizer) for sentence in english_sentences]
+    tokenized_french = [tokenize(sentence, fr_tokenizer) for sentence in french_sentences]
+
+
+    longest_length = len(max(tokenized_english, key=len))
+    print("Longest sentence length: {}".format(longest_length))
     english_words, english_word_to_idx = build_vocab(tokenized_english)
     french_words, french_word_to_idx = build_vocab(tokenized_french)
 
     # Create dataset and dataloader
-    dataset = TranslationDataset(english_sentences, french_sentences, english_word_to_idx, french_word_to_idx)
+    dataset = TranslationDataset(english_sentences, french_sentences, english_word_to_idx, french_word_to_idx, en_tokenizer, fr_tokenizer)
     # split the dataset into train, validation, and test sets
     train_dataset, val_dataset, test_dataset = split_dataset(dataset, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1,
                                                              shuffle=True)
+    print(len(train_dataset))
+    print(len(val_dataset))
+    print(len(test_dataset))
 
+    print(f"Number of English Vocabularies: {len(english_words)}")
+    print(f"Number of French Vocabularies: {len(french_words)}")
     # Create dataloaders for training and validation sets, may use num_workers. Batch-wise padding is applied by collate_fn.
     train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, collate_fn=collate_fn)
     val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False, collate_fn=collate_fn)
@@ -111,7 +131,9 @@ def get_dataloader():
 
 if __name__ == '__main__':
     train_dataloader, val_dataloader, test_dataloader, english_words, french_words, english_word_to_idx, french_word_to_idx = get_dataloader()
+
     for english_sentences, french_sentences in test_dataloader:
         print(english_sentences.shape)
+        # print(english_sentences[:, 0])
         print(french_sentences.shape)
         break
